@@ -198,9 +198,6 @@ def start():
 # ------------------------------------------------------------------------------ #
 
 def control():
-
-    global UID
-    global UIDant
     
     global car_return
     global coordinates
