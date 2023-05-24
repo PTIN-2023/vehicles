@@ -17,7 +17,7 @@ status_car = {
 
 clientS = mqtt.Client()
 
-ID = 0000
+ID = 1
 
 car_return = False
 coordinates = None
@@ -93,13 +93,13 @@ def start_car():
         battery_level, autonomy = move_car(angle, distance, battery_level, autonomy)
 
         # Send the car position to Cloud
-        send_location(ID, coordinates[i], 3, battery_level, autonomy)
+        send_location(ID, coordinates[i], 4 if car_return else 3, battery_level, autonomy)
 
         # Update the current point
         x1, y1 = x2, y2
 
         # Add some delay to simulate the car movement
-        time.sleep(1)
+        time.sleep(0.5)
 
     car_return = not car_return
     coordinates.reverse()
@@ -110,7 +110,7 @@ def start_car():
 def send_location(id, location, status, battery, autonomy):
 
     # Connect to MQTT server
-    clientS.connect("test.mosquitto.org", 1883, 60)
+    clientS.connect("147.83.159.195", 24183, 60)
 
     # JSON
     msg = {	"id_car": 	        id,
@@ -125,8 +125,8 @@ def send_location(id, location, status, battery, autonomy):
     # Code the JSON message as a string
     mensaje_json = json.dumps(msg)
 
-    # Publish in "PTIN2023/A1/CAR"
-    clientS.publish("PTIN2023/A1/CAR/UPDATELOCATION", mensaje_json)
+    # Publish in "PTIN2023/CAR"
+    clientS.publish("PTIN2023/CAR/UPDATELOCATION", mensaje_json)
 
     # Close MQTT connection
     clientS.disconnect()
@@ -134,7 +134,7 @@ def send_location(id, location, status, battery, autonomy):
 def update_status(id, status):
 
     # Connect to MQTT server
-    clientS.connect("test.mosquitto.org", 1883, 60)
+    clientS.connect("147.83.159.195", 24183, 60)
 
     # JSON
     msg = {	"id_car":   id,
@@ -143,8 +143,29 @@ def update_status(id, status):
     # Code the JSON message as a string
     mensaje_json = json.dumps(msg)
 
-    # Publish in "PTIN2023/A1/CAR"
-    clientS.publish("PTIN2023/A1/CAR/UPDATESTATUS", mensaje_json)
+    # Publish in "PTIN2023/CAR"
+    clientS.publish("PTIN2023/CAR/UPDATESTATUS", mensaje_json)
+
+    print("CAR: " + str(id) + " | STATUS:  " + status_car[status])
+
+    # Close MQTT connection
+    clientS.disconnect()
+
+def update_status(id, status, statusorder):
+
+    # Connect to MQTT server
+    clientS.connect("147.83.159.195", 24183, 60)
+
+    # JSON
+    msg = {	"id_car":       id,
+            "status":       status, 
+            "statusorder":  statusorder}
+
+    # Code the JSON message as a string
+    mensaje_json = json.dumps(msg)
+
+    # Publish in "PTIN2023/CAR"
+    clientS.publish("PTIN2023/CAR/UPDATESTATUS", mensaje_json)
 
     print("CAR: " + str(id) + " | STATUS:  " + status_car[status])
 
@@ -168,7 +189,7 @@ def on_connect(client, userdata, flags, rc):
 
 def on_message(client, userdata, msg):
     
-    if msg.topic == "PTIN2023/A1/CAR/ORDER":	
+    if msg.topic == "PTIN2023/CAR/ORDER":	
 
         global ID
         global coordinates    
@@ -182,7 +203,7 @@ def on_message(client, userdata, msg):
                     coordinates = json.loads(payload[needed_keys[2]])['coordinates']
                     print("RECEIVED ROUTE: " + str(coordinates[0]) + " -> " + str(coordinates[-1]))
             else:
-                print("FORMAT ERROR! --> PTIN2023/A1/CAR/ORDER")        
+                print("FORMAT ERROR! --> PTIN2023/CAR/ORDER")        
         else:
             print("Message: " + msg.payload.decode('utf-8'))
 
@@ -192,7 +213,7 @@ def start():
     clientR.on_connect = on_connect
     clientR.on_message = on_message
 
-    clientR.connect("test.mosquitto.org", 1883, 60)
+    clientR.connect("147.83.159.195", 24183, 60)
     clientR.loop_forever()
 
 # ------------------------------------------------------------------------------ #
@@ -209,11 +230,11 @@ def control():
             start_coordinates = True
 
             # En proceso de carga ~ 10s
-            update_status(ID, 1)
-            time.sleep(5)
+            update_status(ID, 1) # update_status(ID, 1, 0)
+            time.sleep(10)
 
             # En reparto
-            update_status(ID, 3)
+            update_status(ID, 3) # update_status(ID, 3, 3)
             start_car()
 
         time.sleep(0.25)
@@ -222,16 +243,16 @@ def control():
                             
             if car_return:
                 # En proceso de descarga ~ 10s
-                update_status(ID, 2)
+                update_status(ID, 2) # update_status(ID, 2, 0)
                 time.sleep(5)
 
                 # Vuelta al almacén
-                update_status(ID, 4)
+                update_status(ID, 4) # update_status(ID, 4, 0)
                 start_car()
                             
             else:
                 # En espera
-                update_status(ID, 5)
+                update_status(ID, 5) # update_status(ID, 5, 0)
                 start_coordinates = False
 
                 car_return = False
