@@ -6,13 +6,23 @@ import paho.mqtt.client as mqtt
 # ------------------------------------------------------------------------------ #
 
 status_car = {
-    1 : "carga - se encuentra en el almacén cargando paquetes",
-    2 : "descarga - se encuentra en la colmena descargando paquetes.", 
-    3 : "entrega - camino hacia la colmena",
-    4 : "retorno - vuelve al almacén",
-    5 : "en espera - no hace nada.",
-    6 : "en reparación - en taller por revisión o avería.",
-    7 : "alerta - posible avería de camino o cualquier situación anormal."
+    1 : "loading",
+    2 : "unloading", 
+    3 : "delivering",
+    4 : "returning",
+    5 : "waits",
+    6 : "repairing",
+    7 : "alert"
+}
+
+status_desc = {
+    1 : "loading - se encuentra en el almacén cargando paquetes.",
+    2 : "unloading - es troba en la colmena descarregant.", 
+    3 : "delivering - camí cap a la colmena.",
+    4 : "returning - tornada al magatzem.",
+    5 : "waits - no fa res.",
+    6 : "repairing - en taller per revisió o avaria.",
+    7 : "alert - possible avaria de camí o qualsevol situació anormal."
 }
 
 clientS = mqtt.Client()
@@ -99,11 +109,10 @@ def start_car():
         x1, y1 = x2, y2
 
         # Add some delay to simulate the car movement
-        time.sleep(0.5)
+        time.sleep(0.25)
 
     car_return = not car_return
     coordinates.reverse()
-
 
 # ------------------------------------------------------------------------------ #
 
@@ -118,7 +127,8 @@ def send_location(id, location, status, battery, autonomy):
                 "latitude":     location[0],
                 "longitude":    location[1]
             },
-            "status":	        status,
+            "status_num":       status,
+            "status":           status_car[status],
             "battery":          battery,
             "autonomy":         autonomy}
 
@@ -137,29 +147,9 @@ def update_status(id, status):
     clientS.connect("147.83.159.195", 24183, 60)
 
     # JSON
-    msg = {	"id_car":   id,
-            "status":   status }
-
-    # Code the JSON message as a string
-    mensaje_json = json.dumps(msg)
-
-    # Publish in "PTIN2023/CAR"
-    clientS.publish("PTIN2023/CAR/UPDATESTATUS", mensaje_json)
-
-    print("CAR: " + str(id) + " | STATUS:  " + status_car[status])
-
-    # Close MQTT connection
-    clientS.disconnect()
-
-def update_status(id, status, statusorder):
-
-    # Connect to MQTT server
-    clientS.connect("147.83.159.195", 24183, 60)
-
-    # JSON
     msg = {	"id_car":       id,
-            "status":       status, 
-            "statusorder":  statusorder}
+            "status_num":   status,
+            "status":       status_car[status] }
 
     # Code the JSON message as a string
     mensaje_json = json.dumps(msg)
@@ -167,7 +157,7 @@ def update_status(id, status, statusorder):
     # Publish in "PTIN2023/CAR"
     clientS.publish("PTIN2023/CAR/UPDATESTATUS", mensaje_json)
 
-    print("CAR: " + str(id) + " | STATUS:  " + status_car[status])
+    print("CAR: " + str(id) + " | STATUS:  " + status_desc[status])
 
     # Close MQTT connection
     clientS.disconnect()
@@ -189,7 +179,7 @@ def on_connect(client, userdata, flags, rc):
 
 def on_message(client, userdata, msg):
     
-    if msg.topic == "PTIN2023/CAR/ORDER":	
+    if msg.topic == "PTIN2023/CAR/STARTROUTE":	
 
         global ID
         global coordinates    
@@ -200,10 +190,10 @@ def on_message(client, userdata, msg):
 
             if all(key in payload for key in needed_keys):                
                 if ID == payload[needed_keys[0]] and payload[needed_keys[1]] == 1:
-                    coordinates = json.loads(payload[needed_keys[2]])['coordinates']
+                    coordinates = json.loads(payload[needed_keys[2]])
                     print("RECEIVED ROUTE: " + str(coordinates[0]) + " -> " + str(coordinates[-1]))
             else:
-                print("FORMAT ERROR! --> PTIN2023/CAR/ORDER")        
+                print("FORMAT ERROR! --> PTIN2023/CAR/STARTROUTE")        
         else:
             print("Message: " + msg.payload.decode('utf-8'))
 
