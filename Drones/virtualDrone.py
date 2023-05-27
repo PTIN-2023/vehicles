@@ -4,16 +4,26 @@ from threading import Thread
 import json
 import paho.mqtt.client as mqtt
 
-
 status_dron = {
-    1: "carga - se encuentra en la colmena recogiendo el paquete.", 
-    2: "descarga - llegada al destino (cliente)",
-    3: "entrega - de camino hacia el cliente",
-    4: "retorno - vuelve a la colmena", 
-    5: "esperando recogida - esperando al cliente (QR)",
-    6: "en espera - no hace nada (situado en colmena)",
-    7: "en reparación - en taller por revisión o avería.",
-    8: "alerta - posible avería de camino o cualquier situación anormal."
+    1: "loading",
+    2: "unloading",
+    3: "delivering",
+	4: "awaiting",
+	5: "returning",
+   	6: "waits",
+	7: "repairing",
+	8: "alert"
+}
+
+status_desc = {
+    1: "loading - es troba en la colmena agafant el paquet.",
+    2: "unloading - arribada al destí (client).",
+    3: "delivering - camí cap al client.",
+	4: "awaiting - esperant al client (QR).",
+	5: "returning - tornada a la colmena.",
+   	6: "waits - no fa res (situat en colmena)",
+	7: "repairing - en taller per revisió o avaria.",
+	8: "alert- possible avaria de camí o qualsevol situació anormal."
 }
 
 clientS = mqtt.Client()
@@ -23,9 +33,11 @@ ID = 1
 coordinates = None
 dron_return = False
 wait_client = False
-user_confirmed = True   # Nos lo mandan
+user_confirmed = False   # Nos lo mandan
 order_delivered = False
 start_coordinates = False
+
+time_wait_client = 25 # secons
 
 # Initialize the battery level and the autonomy
 autonomy = 500
@@ -79,6 +91,7 @@ def start_dron():
     global wait_client
     
     global autonomy
+    global dron_return
     global battery_level
 
     x1, y1 = coordinates[0][0], coordinates[0][1]
@@ -97,15 +110,15 @@ def start_dron():
         battery_level, autonomy = move_dron(angle, distance, battery_level, autonomy)
 
         # Send the dron position to Cloud
-        send_location(ID, coordinates[i], 4 if dron_return else 3, battery_level, autonomy)
+        send_location(ID, coordinates[i], 5 if dron_return else 3, battery_level, autonomy)
 
         # Update the current point
         x1, y1 = x2, y2
 
         # Add some delay to simulate the dron movement
-        time.sleep(0.5)
+        time.sleep(1)
 
-    wait_client = not wait_client
+    wait_client = True
     coordinates.reverse()
 
 # ------------------------------------------------------------------------------ #
@@ -121,7 +134,8 @@ def send_location(id, location, status, battery, autonomy):
                 "latitude":     location[0],
                 "longitude":    location[1]
             },
-            "status":	        status,
+            "status_num":       status,
+            "status":           status_dron[status],
             "battery":          battery,
             "autonomy":         autonomy}
 
@@ -140,29 +154,9 @@ def update_status(id, status):
     clientS.connect("147.83.159.195", 24183, 60)
 
     # JSON
-    msg = {	"id_dron":   id,
-            "status":   status }
-
-    # Code the JSON message as a string
-    mensaje_json = json.dumps(msg)
-
-    # Publish in "PTIN2023/DRON"
-    clientS.publish("PTIN2023/DRON/UPDATESTATUS", mensaje_json)
-
-    print("DRON: " + str(id) + " | STATUS:  " + status_dron[status])
-
-    # Close MQTT connection
-    clientS.disconnect()
-
-def update_status(id, status, statusorder):
-
-    # Connect to MQTT server
-    clientS.connect("147.83.159.195", 24183, 60)
-
-    # JSON
     msg = {	"id_dron":      id,
-            "status":       status,
-            "statusorder":  statusorder }
+            "status_num":   status,
+            "status":       status_dron[status]}
 
     # Code the JSON message as a string
     mensaje_json = json.dumps(msg)
@@ -170,7 +164,7 @@ def update_status(id, status, statusorder):
     # Publish in "PTIN2023/DRON"
     clientS.publish("PTIN2023/DRON/UPDATESTATUS", mensaje_json)
 
-    print("DRON: " + str(id) + " | STATUS:  " + status_dron[status])
+    print("DRON: " + str(id) + " | STATUS:  " + status_desc[status])
 
     # Close MQTT connection
     clientS.disconnect()
@@ -192,9 +186,10 @@ def on_connect(client, userdata, flags, rc):
 
 def on_message(client, userdata, msg):
     
-    if msg.topic == "PTIN2023/DRON/ORDER":	
+    global ID
+    
+    if msg.topic == "PTIN2023/DRON/STARTROUTE":	
 
-        global ID
         global coordinates    
         if(is_json(msg.payload.decode('utf-8'))):
             
@@ -203,10 +198,28 @@ def on_message(client, userdata, msg):
 
             if all(key in payload for key in needed_keys):                
                 if ID == payload[needed_keys[0]] and payload[needed_keys[1]] == 1:
-                    coordinates = json.loads(payload[needed_keys[2]])['coordinates']
+                    coordinates = json.loads(payload[needed_keys[2]])
                     print("RECEIVED ROUTE: " + str(coordinates[0]) + " -> " + str(coordinates[-1]))
             else:
-                print("FORMAT ERROR! --> PTIN2023/CAR/ORDER")        
+                print("FORMAT ERROR! --> PTIN2023/DRON/STARTROUTE")        
+        else:
+            print("Message: " + msg.payload.decode('utf-8'))
+
+    elif msg.topic == "PTIN2023/DRON/CONFIRMDELIVERY":
+
+        global user_confirmed
+        if(is_json(msg.payload.decode('utf-8'))):
+
+            payload = json.loads(msg.payload.decode('utf-8'))
+            needed_keys = ["id_dron", "status"]
+            
+            if all(key in payload for key in needed_keys):                
+                if ID == payload[needed_keys[0]]:
+                    user_confirmed = (payload[needed_keys[1]] == 1)
+                    print("USER RECEIVE CONFIRMED!", user_confirmed)
+            else:
+                print("FORMAT ERROR! --> PTIN2023/DRON/CONFIRMDELIVERY") 
+
         else:
             print("Message: " + msg.payload.decode('utf-8'))
 
@@ -226,6 +239,7 @@ def control():
     global dron_return
     global coordinates
     global wait_client
+    global user_confirmed
     global order_delivered
     global start_coordinates
 
@@ -249,26 +263,29 @@ def control():
             if wait_client:
 
                 # Esperando al cliente
-                update_status(ID, 5)
-                time.sleep(10)
-
+                update_status(ID, 4)
+                
+                waiting = 0
+                init = time.time()
+                while not user_confirmed and waiting < time_wait_client:
+                    waiting = (time.time() - init)
+                
                 if user_confirmed:   
                     # En proceso de descarga ~ 5s
                     update_status(ID, 2)
                     time.sleep(5)
 
-                    order_delivered = False
-
+                    order_delivered = True
                 else:
                     order_delivered = False
                 
-                wait_client = not wait_client
-                dron_return = not dron_return
-                            
+                wait_client = False
+                dron_return = True
+
             elif dron_return:
                 
                 # Vuelta a a la colmena
-                update_status(ID, 4)
+                update_status(ID, 5)
                 start_dron()
 
                 # En espera
@@ -278,6 +295,7 @@ def control():
                 coordinates = None
                 dron_return = False
                 wait_client = False
+                user_confirmed = False
                 order_delivered = False
 
 if __name__ == '__main__':
