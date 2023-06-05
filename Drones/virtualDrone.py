@@ -128,6 +128,13 @@ def send_location(id, location, status, battery, autonomy):
     # Connect to MQTT server
     clientS.connect("147.83.159.195", 24183, 60)
 
+    # Anomalia bateria
+    if battery <= 5:
+        print("CRÍTIC: Nivell de bateria crític (%d). Retornant dron a la colmena..." % battery)
+        status=5
+    elif battery <= 10:
+        print("ATENCIÓ: Nivell de bateria baix (%d)" % battery)
+
     # JSON
     msg = {	"id_dron": 	        id,
             "location_act": 	{
@@ -148,10 +155,27 @@ def send_location(id, location, status, battery, autonomy):
     # Close MQTT connection
     clientS.disconnect()
 
-def update_status(id, status):
+def update_status(id, status, temps):
 
     # Connect to MQTT server
     clientS.connect("147.83.159.195", 24183, 60)
+
+    # Anomalia fallo tecnic
+    segons_anomalia = 100
+    fallos_tecnics=["El dron ha explotat", "Motor averiat", "Ala trencada", "Sensor averiat", "S'ha perdut la comunicació"]
+    # Si es supera el temps de anomalia i (opcional) el factor aleatori 1/10
+    if int(time.time()) - temps > segons_anomalia and not bool(randint(0,9)):
+        print("CRÍTIC: Hi ha hagut un error tècnic amb el dron de ID %d, missatge d'error: '%s'" % id, fallos_tecnics[randint(0,4)]) 
+        print("    Es requereix asistència per retirar el dron de l'útima posició enregistrada.")
+        status=8
+
+    # Anomalia obstacle
+    segons_anomalia = 50
+    # Si es supera el temps de anomalia i (opcional) el factor aleatori 1/10
+    if int(time.time()) - temps > segons_anomalia:
+        print("ATENCIÓ: Obstacle imprevist a la ruta. Redirigint...") 
+        status=8
+
 
     # JSON
     msg = {	"id_dron":      id,
@@ -235,7 +259,7 @@ def start():
 # ------------------------------------------------------------------------------ #
 
 def control():
-
+    temps = int(time.time())
     global dron_return
     global coordinates
     global wait_client
@@ -249,11 +273,11 @@ def control():
             start_coordinates = True
 
             # En proceso de carga ~ 5s
-            update_status(ID, 1)
+            update_status(ID, 1, temps)
             time.sleep(5)
 
             # En reparto
-            update_status(ID, 3)
+            update_status(ID, 3, temps)
             start_dron()
 
         time.sleep(0.25)
@@ -263,7 +287,7 @@ def control():
             if wait_client:
 
                 # Esperando al cliente
-                update_status(ID, 4)
+                update_status(ID, 4, temps)
                 
                 waiting = 0
                 init = time.time()
@@ -272,7 +296,7 @@ def control():
                 
                 if user_confirmed:   
                     # En proceso de descarga ~ 5s
-                    update_status(ID, 2)
+                    update_status(ID, 2, temps)
                     time.sleep(5)
 
                     order_delivered = True
@@ -285,11 +309,11 @@ def control():
             elif dron_return:
                 
                 # Vuelta a a la colmena
-                update_status(ID, 5)
+                update_status(ID, 5, temps)
                 start_dron()
 
                 # En espera
-                update_status(ID, 6)
+                update_status(ID, 6, temps)
                 start_coordinates = False
 
                 coordinates = None
