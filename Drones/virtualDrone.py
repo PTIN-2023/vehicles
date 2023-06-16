@@ -3,6 +3,7 @@ from threading import Thread
 # ---------------------------- #
 import json
 import paho.mqtt.client as mqtt
+import requests
 
 status_dron = {
     1: "loading",
@@ -37,7 +38,12 @@ user_confirmed = False   # Nos lo mandan
 order_delivered = False
 start_coordinates = False
 
-time_wait_client = 25 # secons
+time_wait_client = 50 # secons
+
+# API per el temps que fa
+api_key = "1293361bdf356cc6360844d8bf8a9fcf"
+base_url = "http://api.openweathermap.org/data/2.5/weather?"
+complete_url = base_url + "appid=" + api_key + "&units=metric"
 
 # Initialize the battery level and the autonomy
 autonomy = 500
@@ -135,6 +141,26 @@ def send_location(id, location, status, battery, autonomy):
     elif battery <= 10:
         print("ATENCIÓ: Nivell de bateria baix (%d)" % battery)
 
+    # Anomalia temps
+    # Posem factor Random perque no fagi calls a la api cada dos per tres
+    if(bool(randint(0,9))):
+        url = complete_url + "&lat=" + location[0] + "&lon=" + location[1]
+        response = requests.get(url)
+        x = response.json()
+        if x["cod"] != "404":   
+            y = x["main"]
+            temperatura = y["temp"]
+            full = x["weather"]
+            condicio = full[0]["main"]
+            if condicio == "rain" or condicio == "storm" or temperatura > 35 or temperatura < 5:
+                print("ALERTA: Condicions atmosferiques adverses.") 
+                print("Temperatura: %d" % (temperatura))
+                print("Condicions: %s" % (condicions))
+                print("Dron en espera.")
+                status=6
+        else:
+            print("Avís: Hi ha hagut un error en la connexió amb l'API del temps.")
+
     # JSON
     msg = {	"id_dron": 	        id,
             "location_act": 	{
@@ -175,7 +201,6 @@ def update_status(id, status, temps):
     if int(time.time()) - temps > segons_anomalia:
         print("ATENCIÓ: Obstacle imprevist a la ruta. Redirigint...") 
         status=8
-
 
     # JSON
     msg = {	"id_dron":      id,
@@ -294,14 +319,27 @@ def control():
                 while not user_confirmed and waiting < time_wait_client:
                     waiting = (time.time() - init)
                 
-                if user_confirmed:   
-                    # En proceso de descarga ~ 5s
-                    update_status(ID, 2, temps)
-                    time.sleep(5)
-
-                    order_delivered = True
-                else:
+                # Atencio, el temps que espera el podem modificar 
+                if waiting > time_wait_client:
+                # Anomalia: usuari no recull el paquet a temps
+                    update_status(ID, 5, temps)
+                    # Es podria posar anomalia nova de tornant a colemna amb error
                     order_delivered = False
+                    print("Error: Temps d'espera per recollir el paquet esgotat. Retornant a la colmena...")
+                else:
+
+                    if user_confirmed:   
+                        # En proceso de descarga ~ 5s
+                        update_status(ID, 2, temps)
+                        time.sleep(5)
+
+                        order_delivered = True
+                    else:
+                        # Anomalia: usuari no autoritzat pel paquet
+                        update_status(ID, 5, temps)
+                        # Es podria posar anomalia nova de tornant a colemna amb error
+                        order_delivered = False
+                        print("Error: Usuari que ha intentat recollir el paquet no està autroitzat. Retornant a la colmena...")
                 
                 wait_client = False
                 dron_return = True
