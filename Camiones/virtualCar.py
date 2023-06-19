@@ -121,6 +121,13 @@ def send_location(id, location, status, battery, autonomy):
     # Connect to MQTT server
     clientS.connect("147.83.159.195", 24183, 60)
 
+    # Anomalia bateria
+    if battery <= 5:
+        print("CRÍTIC: Nivell de bateria crític (%d). Retornant furgó al magatzem..." % battery)
+        status = 4
+    elif battery <= 10:
+        print("ATENCIÓ: Nivell de bateria baix (%d)" % battery)
+
     # JSON
     msg = {	"id_car": 	        id,
             "location_act": 	{
@@ -141,10 +148,26 @@ def send_location(id, location, status, battery, autonomy):
     # Close MQTT connection
     clientS.disconnect()
 
-def update_status(id, status):
+def update_status(id, status, temps):
 
     # Connect to MQTT server
     clientS.connect("147.83.159.195", 24183, 60)
+
+    # Anomalia fallo tecnic
+    segons_anomalia = 100
+    fallos_tecnics=["El furgó ha explotat", "Motor averiat", "Roda punxada", "Sensor averiat", "S'ha perdut la comunicació"]
+    # Si es supera el temps de anomalia i (opcional) el factor aleatori 1/10
+    if int(time.time()) - temps > segons_anomalia and not bool(randint(0,9)):
+        print("CRÍTIC: Hi ha hagut un error tècnic amb el furgó de ID %d, missatge d'error: '%s'" % id, fallos_tecnics[randint(0,4)])
+        print("    Es requereix asistència per retirar el furgó de l'útima posició enregistrada.")
+        status=7
+
+    # Anomalia obstacle
+    segons_anomalia = 50
+    # Si es supera el temps de anomalia i (opcional) el factor aleatori 1/10
+    if int(time.time()) - temps > segons_anomalia:
+        print("ATENCIÓ: Obstacle imprevist a la ruta. Redirigint...")
+        status=7
 
     # JSON
     msg = {	"id_car":       id,
@@ -209,7 +232,7 @@ def start():
 # ------------------------------------------------------------------------------ #
 
 def control():
-    
+    temps = int(time.time())
     global car_return
     global coordinates
     global start_coordinates
@@ -220,11 +243,11 @@ def control():
             start_coordinates = True
 
             # En proceso de carga ~ 10s
-            update_status(ID, 1) # update_status(ID, 1, 0)
+            update_status(ID, 1, temps) # update_status(ID, 1, 0)
             time.sleep(10)
 
             # En reparto
-            update_status(ID, 3) # update_status(ID, 3, 3)
+            update_status(ID, 3, temps) # update_status(ID, 3, 3)
             start_car()
 
         time.sleep(0.25)
@@ -233,16 +256,16 @@ def control():
                             
             if car_return:
                 # En proceso de descarga ~ 10s
-                update_status(ID, 2) # update_status(ID, 2, 0)
+                update_status(ID, 2, temps) # update_status(ID, 2, 0)
                 time.sleep(5)
 
                 # Vuelta al almacén
-                update_status(ID, 4) # update_status(ID, 4, 0)
+                update_status(ID, 4, temps) # update_status(ID, 4, 0)
                 start_car()
                             
             else:
                 # En espera
-                update_status(ID, 5) # update_status(ID, 5, 0)
+                update_status(ID, 5, temps) # update_status(ID, 5, 0)
                 start_coordinates = False
 
                 car_return = False
