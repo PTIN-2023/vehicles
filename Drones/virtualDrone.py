@@ -41,7 +41,7 @@ start_coordinates = False
 time_wait_client = 50 # secons
 
 # API per el temps que fa
-api_key = "1293361bdf356cc6360844d8bf8a9fcf"
+api_key = "preguntar pel grup"
 base_url = "http://api.openweathermap.org/data/2.5/weather?"
 complete_url = base_url + "appid=" + api_key + "&units=metric"
 
