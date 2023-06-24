@@ -157,8 +157,9 @@ def start_dron():
 
     print("DRON FÍSIC: Iniciant ruta de prova")
     tello.move_forward(200)
-    tello.rotate_clockwise(360)
-    tello.move_back(200)
+    time.sleep(2)
+    tello.rotate_clockwise(180)
+    tello.move_forward(200)
 
     print("DRON FÍSIC: Aterritzant")
     tello.land()
