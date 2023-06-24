@@ -2,7 +2,7 @@ from djitellopy import Tello
 
 tello = Tello()
 
-tello.connect()
+tello.connect(False)
 tello.takeoff()
 
 tello.move_left(100)

@@ -4,9 +4,7 @@ from threading import Thread
 # ---------------------------- #
 import json
 import paho.mqtt.client as mqtt
-import requests
 # ---------------------------- #
-tello = Tello()
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--id', dest = 'id', help = 'DRON ID')
@@ -53,11 +51,6 @@ start_coordinates = False
 
 time_wait_client = 180 # seconds
 
-# API per el temps que fa
-api_key = "Secret"
-base_url = "http://api.openweathermap.org/data/2.5/weather?"
-complete_url = base_url + "appid=" + api_key + "&units=metric"
-
 # Initialize the battery level and the autonomy
 autonomy = 500
 battery_level = 100
@@ -72,46 +65,36 @@ def get_angle(x1, y1, x2, y2):
 # Function to control the dron movement based on the angle
 def move_dron(angle, distance, battery_level, autonomy):
     
-   
-    print("DRON FÍSIC: Connectant amb el dron...")
-    tello.connect()
-
-    print("DRON FÍSIC: Ready for takeoff. ")
-    # OJITO: Potser s'ha de posar tello.takeoff() perque funcuini al principi
-    tello.move_up(150)
-
-    print("DRON FÍSIC: Iniciant ruta")
-    tello.rotate_clockwise(math.degrees(angle))
-    tello.move_forward(distance*100)
-    # Multiplica * 100 perque estava en metres
-
-    print("DRON FÍSIC: S'ha arribat al final de la ruta. Aterritzant i esperant al client per escanejar...")
-    tello.move_down(150)
-    tello.land()
-
-    # Això es un placeholder, cal programar el que es llegeixi el qr i torni
-    qr_escanejat = False
-    while not qr_escanejat:
-        if not bool(randint(0,999)):
-            qr_escanejat = True
-            print("DRON FÍSIC: QR escanejat. Retornant a base...")
-
-    tello.move_up(150)
-    tello.rotate_clockwise(180)
-    tello.move_forward(distance*100)
-
-    print("DRON FÍSIC: Aterritzant a base")
-    tello.move_down(150)
-    tello.land()
-
+    # Calculate the distance traveled by the dron
+    distance_traveled = math.sqrt(distance[0]**2 + distance[1]**2)
 
     # Calculate the battery usage based on the distance traveled
-    battery_level = tello.get_battery()  
+    battery_usage = distance_traveled / 0.025  # Assuming the dron uses 0.025 units of battery per meter
+    
+    # Update the battery level
+    battery_level -= battery_usage
 
     # Update the autonomy based on the distance traveled and the battery usage
-    autonomy = (battery_level/100) * 8
+    autonomy -= distance_traveled / 100 * battery_level * 20
 
-    stats = "Nivell de bateria: %.2f | Autonomia en minuts: %.2f | " % (battery_level, autonomy)
+    stats = "Battery level: %.2f | Autonomy: %.2f | " % (battery_level, autonomy)
+
+    # Send signal to the dron to move in the appropriate direction based on the angle
+    if angle > math.pi/4 and angle < 3*math.pi/4:
+        # Move forward
+        print(stats + "Moving forward")
+    
+    elif angle > -3*math.pi/4 and angle < -math.pi/4:
+        # Move backward
+        print(stats + "Moving backward")
+    
+    elif angle >= 3*math.pi/4 or angle <= -3*math.pi/4:
+        # Turn left
+        print(stats + "Turning left")
+    
+    else:
+        # Turn right
+        print(stats + "Turning right")
     
     return battery_level, autonomy
 
@@ -122,29 +105,6 @@ def start_dron():
     global autonomy
     global dron_return
     global battery_level
-
-    #Obtenir coordenades inici i final (nomes hi ha aquestes dos)
-    x1, y1 = coordinates[0][0], coordinates[0][1]
-
-    x2, y2 = coordinates[len(coordinates[0])-1][0], coordinates[len(coordinates[0])-1][1]
-
-    # Calculate the distance between the current point and the next point
-    distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-
-    # Calculate the angle between the current point and the next point
-    angle = get_angle(x1, y1, x2, y2)
-
-    # Control the dron movement based on the angle and update the battery level and the autonomy
-    battery_level, autonomy = move_dron(angle, distance, battery_level, autonomy)
-
-    # Send the dron position to Cloud
-    send_location(ID, coordinates[i], 5 if dron_return else 3, battery_level, autonomy)
-
-    # Update the current point
-    x1, y1 = x2, y2
-
-    wait_client = True
-    coordinates.reverse()
 
     # https://djitellopy.readthedocs.io/en/latest/tello/
     # Moves -> cm, rotate -> Grados 
@@ -170,33 +130,6 @@ def send_location(id, location, status, battery, autonomy):
     # Connect to MQTT server
     clientS.connect("147.83.159.195", 24183, 60)
 
-    # Anomalia bateria
-    if battery <= 5:
-        print("CRÍTIC: Nivell de bateria crític (%d). Retornant dron a la colmena..." % battery)
-        status=5
-    elif battery <= 10:
-        print("ATENCIÓ: Nivell de bateria baix (%d)" % battery)
-    # Anomalia temps
-    # Posem factor Random perque no fagi calls a la api cada dos per tres
-    if(bool(randint(0,9))):
-        url = complete_url + "&lat=" + location[0] + "&lon=" + location[1]
-        response = requests.get(url)
-        x = response.json()
-        if x["cod"] != "404":   
-            y = x["main"]
-            temperatura = y["temp"]
-            full = x["weather"]
-            condicio = full[0]["main"]
-            if condicio == "rain" or condicio == "storm" or temperatura > 35 or temperatura < 5:
-                print("ALERTA: Condicions atmosferiques adverses.") 
-                print("Temperatura: %d" % (temperatura))
-                print("Condicions: %s" % (condicions))
-                print("Dron en espera.")
-                status=6
-        else:
-            print("Avís: Hi ha hagut un error en la connexió amb l'API del temps.")
-
-
     # JSON
     msg = {	"id_dron": 	        id,
             "location_act": 	{
@@ -217,26 +150,10 @@ def send_location(id, location, status, battery, autonomy):
     # Close MQTT connection
     clientS.disconnect()
 
-def update_status(id, status, temps):
+def update_status(id, status):
 
     # Connect to MQTT server
     clientS.connect("147.83.159.195", 24183, 60)
-
-    	
-    # Anomalia fallo tecnic
-    segons_anomalia = 100
-    fallos_tecnics=["El dron ha explotat", "Motor averiat", "Ala trencada", "Sensor averiat", "S'ha perdut la comunicació"]
-    # Si es supera el temps de anomalia i (opcional) el factor aleatori 1/10
-    if int(time.time()) - temps > segons_anomalia and not bool(randint(0,9)):
-        print("CRÍTIC: Hi ha hagut un error tècnic amb el dron de ID %d, missatge d'error: '%s'" % id, fallos_tecnics[randint(0,4)]) 
-        print("    Es requereix asistència per retirar el dron de l'útima posició enregistrada.")
-        status=8
-    # Anomalia obstacle
-    segons_anomalia = 50
-    # Si es supera el temps de anomalia i (opcional) el factor aleatori 1/10
-    if int(time.time()) - temps > segons_anomalia:
-        print("ATENCIÓ: Obstacle imprevist a la ruta. Redirigint...") 
-        status=8
 
     # JSON
     msg = {	"id_dron":      id,
@@ -320,7 +237,7 @@ def start():
 # ------------------------------------------------------------------------------ #
 
 def control():
-    temps = int(time.time())
+
     global dron_return
     global coordinates
     global wait_client
@@ -334,11 +251,11 @@ def control():
             start_coordinates = True
 
             # En proceso de carga ~ 5s
-            update_status(ID, 1, temps)
+            update_status(ID, 1)
             time.sleep(5)
 
             # En reparto
-            update_status(ID, 3, temps)
+            update_status(ID, 3)
             start_dron()
 
         time.sleep(0.25)
@@ -348,32 +265,24 @@ def control():
             if wait_client:
 
                 # Esperando al cliente
-                update_status(ID, 4, temps)
+                update_status(ID, 4)
                 
                 waiting = 0
                 init = time.time()
                 while not user_confirmed and waiting < time_wait_client:
                     waiting = (time.time() - init)
                 
-	            # Atencio, el temps que espera el podem modificar 
-                if waiting > time_wait_client:
-                # Anomalia: usuari no recull el paquet a temps
-                    update_status(ID, 5, temps)
-                    # Es podria posar anomalia nova de tornant a colemna amb error
-                    order_delivered = False
-                    print("Error: Temps d'espera per recollir el paquet esgotat. Retornant a la colmena...")
+                if user_confirmed:
+                    # En proceso de descarga ~ 5s
+                    update_status(ID, 2)
+                    time.sleep(10)
+                
+                    update_status(ID, 9)
+                    time.sleep(5)
+                    order_delivered = True
                 else:
-                    if user_confirmed:   
-                        # En proceso de descarga ~ 5s
-                        update_status(ID, 2, temps)
-                        time.sleep(5)
-                        order_delivered = True
-                    else:
-                        # Anomalia: usuari no autoritzat pel paquet
-                        update_status(ID, 5, temps)
-                        # Es podria posar anomalia nova de tornant a colemna amb error
-                        order_delivered = False
-                        print("Error: Usuari que ha intentat recollir el paquet no està autroitzat. Retornant a la colmena...")
+                    order_delivered = False
+                    update_status(ID, 10)
                 
                 wait_client = False
                 dron_return = True
@@ -381,11 +290,11 @@ def control():
             elif dron_return:
                 
                 # Vuelta a a la colmena
-                update_status(ID, 5, temps)
+                update_status(ID, 5)
                 start_dron()
 
                 # En espera
-                update_status(ID, 6, temps)
+                update_status(ID, 6)
                 start_coordinates = False
 
                 coordinates = None
