@@ -1,3 +1,5 @@
+from djitellopy import Tello
+
 import math, time
 from threading import Thread
 # ---------------------------- #
@@ -41,7 +43,7 @@ start_coordinates = False
 time_wait_client = 50 # secons
 
 # API per el temps que fa
-api_key = "preguntar pel grup"
+api_key = "1293361bdf356cc6360844d8bf8a9fcf"
 base_url = "http://api.openweathermap.org/data/2.5/weather?"
 complete_url = base_url + "appid=" + api_key + "&units=metric"
 
@@ -100,32 +102,17 @@ def start_dron():
     global dron_return
     global battery_level
 
-    x1, y1 = coordinates[0][0], coordinates[0][1]
+    tello = Tello()
 
-    # Loop through each coordinate
-    for i in range(1, len(coordinates)):
-        x2, y2 = coordinates[i][0], coordinates[i][1]
+    tello.connect()
+    tello.takeoff()
 
-        # Calculate the distance between the current point and the next point
-        distance = (x2 - x1, y2 - y1)
+    tello.move_left(100)
+    tello.rotate_clockwise(90)
+    tello.move_forward(100)
 
-        # Calculate the angle between the current point and the next point
-        angle = get_angle(x1, y1, x2, y2)
+    tello.land()
 
-        # Control the dron movement based on the angle and update the battery level and the autonomy
-        battery_level, autonomy = move_dron(angle, distance, battery_level, autonomy)
-
-        # Send the dron position to Cloud
-        send_location(ID, coordinates[i], 5 if dron_return else 3, battery_level, autonomy)
-
-        # Update the current point
-        x1, y1 = x2, y2
-
-        # Add some delay to simulate the dron movement
-        time.sleep(1)
-
-    wait_client = True
-    coordinates.reverse()
 
 # ------------------------------------------------------------------------------ #
 
@@ -269,23 +256,6 @@ def on_message(client, userdata, msg):
             else:
                 print("FORMAT ERROR! --> PTIN2023/DRON/CONFIRMDELIVERY") 
 
-        else:
-            print("Message: " + msg.payload.decode('utf-8'))
-    
-    #anomalia pedido cancelado
-    elif msg.topic == "PTIN2023/DRON/CANCELDELIVERY":
-        if(is_json(msg.payload.decode('utf-8'))):
-
-            payload = json.loads(msg.payload.decode('utf-8'))
-            needed_keys = ["id_dron"]
-            
-            if all(key in payload for key in needed_keys):                
-                if ID == payload[needed_keys[0]]:
-                    wait_client = False
-                    dron_return = True
-                    print("USER RECEIVE CANCELED!")
-            else:
-                print("FORMAT ERROR! --> PTIN2023/DRON/CANCELDELIVERY")
         else:
             print("Message: " + msg.payload.decode('utf-8'))
 
