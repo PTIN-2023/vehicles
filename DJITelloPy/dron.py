@@ -183,7 +183,7 @@ def send_location(id, location, status, battery, autonomy):
     # Anomalia temps
     # Posem factor Random perque no fagi calls a la api cada dos per tres
     if(bool(random.randint(0,9))):
-        url = complete_url + "&lat=" + location[0] + "&lon=" + location[1]
+        url = complete_url + "&lat=" + str(location[0]) + "&lon=" + str(location[1])
         response = requests.get(url)
         x = response.json()
         if x["cod"] != "404":
