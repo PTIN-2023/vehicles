@@ -13,7 +13,7 @@ mensaje = {	"id_dron": 	1,
             "route":	0}
 
 # recibido de mapas
-route = {"coordinates" : "[[0, 0], [2, 0]]",
+route = {"coordinates" : "[[0, 0], [2, 1], [2, 0]]",
          "type": "LineString"}
 
 mensaje["route"] = route["coordinates"]

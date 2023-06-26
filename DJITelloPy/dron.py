@@ -51,7 +51,7 @@ user_confirmed = False   # Nos lo mandan
 order_delivered = False
 start_coordinates = False
 
-time_wait_client = 180 # seconds
+time_wait_client = 10 # seconds
 
 # API per el temps que fa
 api_key = "Secret"
@@ -72,38 +72,27 @@ def get_angle(x1, y1, x2, y2):
 # Function to control the dron movement based on the angle
 def move_dron(angle, distance, battery_level, autonomy):
 
-    print("DRON FÍSIC: Connectant amb el dron...")
-    tello.connect()
-
-    print("DRON FÍSIC: Ready for takeoff. ")
-    # OJITO: Potser s'ha de posar tello.takeoff() perque funcuini al principi
-    tello.takeoff()
-    tello.move_up(50)
-
-    print("DRON FÍSIC: Iniciant ruta")
+    print("DRON FÍSIC: Sortint a un punt")
     tello.rotate_clockwise(angle)
     tello.move_forward(distance*100)
+    tello.rotate_clockwise(-angle)
     # Multiplica * 100 perque estava en metres
 
-    print("DRON FÍSIC: S'ha arribat al final de la ruta. Aterritzant i esperant al client per escanejar...")
-    # tello.move_down(tello.get_distance_tof())
-    tello.land()
-
     # Això es un placeholder, cal programar el que es llegeixi el qr i torni
-    qr_escanejat = False
-    while not qr_escanejat:
-        if not bool(random.randint(0,999)):
-            qr_escanejat = True
-            print("DRON FÍSIC: QR escanejat. Retornant a base...")
+#    qr_escanejat = False
+#    while not qr_escanejat:
+#        if not bool(random.randint(0,999)):
+#            qr_escanejat = True
+#            print("DRON FÍSIC: QR escanejat. Retornant a base...")
 
-    tello.takeoff()
-    tello.move_up(50)
-    tello.rotate_clockwise(180)
-    tello.move_forward(int(distance)*100)
+#    tello.takeoff()
+#    tello.move_up(50)
+#    tello.rotate_clockwise(180)
+#    tello.move_forward(int(distance)*100)
 
-    print("DRON FÍSIC: Aterritzant a base")
+#    print("DRON FÍSIC: Aterritzant a base")
     # tello.move_down(50)
-    tello.land()
+#    tello.land()
 
 
     # Calculate the battery usage based on the distance traveled
@@ -124,25 +113,41 @@ def start_dron():
     global dron_return
     global battery_level
 
-    #Obtenir coordenades inici i final (nomes hi ha aquestes dos)
+    # Get starting point
     x1, y1 = coordinates[0][0], coordinates[0][1]
 
-    x2, y2 = coordinates[len(coordinates[0])-1][0], coordinates[len(coordinates[0])-1][1]
+    print("DRON FÍSIC: Connectant amb el dron...")
+    tello.connect()
 
-    # Calculate the distance between the current point and the next point
-    distance = int(math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2))
+    print("DRON FÍSIC: Ready for takeoff. ")
+    tello.takeoff()
+    print("DRON FÍSIC: Iniciant ruta")
+    tello.move_up(100)
 
-    # Calculate the angle between the current point and the next point
-    angle = get_angle(x1, y1, x2, y2)
+    # Loop through each coordinate
+    for i in range(1, len(coordinates)):
 
-    # Control the dron movement based on the angle and update the battery level and the autonomy
-    battery_level, autonomy = move_dron(angle, distance, battery_level, autonomy)
+        # Get next point
+        x2, y2 = coordinates[i][0], coordinates[i][1]
 
-    # Send the dron position to Cloud
-    send_location(ID, coordinates[0], 5 if dron_return else 3, battery_level, autonomy)
+        # Calculate the distance between the current point and the next point
+        distance = int(math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2))
 
-    # Update the current point
-    x1, y1 = x2, y2
+        # Calculate the angle between the current point and the next point
+        angle = get_angle(x1, y1, x2, y2)
+
+        # Control the dron movement based on the angle and update the battery level and the autonomy
+        battery_level, autonomy = move_dron(angle, distance, battery_level, autonomy)
+
+        # Send the dron position to Cloud
+        send_location(ID, coordinates[0], 5 if dron_return else 3, battery_level, autonomy)
+
+        # Update the current point
+        x1, y1 = x2, y2
+
+    print("DRON FÍSIC: S'ha arribat al final de la ruta.")
+    # tello.move_down(tello.get_distance_tof())
+    tello.land()
 
     wait_client = True
     coordinates.reverse()
@@ -180,25 +185,26 @@ def send_location(id, location, status, battery, autonomy):
         status=5
     elif battery <= 10:
         print("ATENCIÓ: Nivell de bateria baix (%d)" % battery)
+
     # Anomalia temps
     # Posem factor Random perque no fagi calls a la api cada dos per tres
-    if(bool(random.randint(0,9))):
-        url = complete_url + "&lat=" + str(location[0]) + "&lon=" + str(location[1])
-        response = requests.get(url)
-        x = response.json()
-        if x["cod"] != "404":
-            y = x["main"]
-            temperatura = y["temp"]
-            full = x["weather"]
-            condicio = full[0]["main"]
-            if condicio == "rain" or condicio == "storm" or temperatura > 35 or temperatura < 5:
-                print("ALERTA: Condicions atmosferiques adverses.")
-                print("Temperatura: %d" % (temperatura))
-                print("Condicions: %s" % (condicions))
-                print("Dron en espera.")
-                status=6
-        else:
-            print("Avís: Hi ha hagut un error en la connexió amb l'API del temps.")
+#    if(bool(random.randint(0,9))):
+#        url = complete_url + "&lat=" + str(location[0]) + "&lon=" + str(location[1])
+#        response = requests.get(url)
+#        x = response.json()
+#        if x["cod"] != "404":
+#            y = x["main"]
+#            temperatura = y["temp"]
+#            full = x["weather"]
+#            condicio = full[0]["main"]
+#            if condicio == "rain" or condicio == "storm" or temperatura > 35 or temperatura < 5:
+#                print("ALERTA: Condicions atmosferiques adverses.")
+#                print("Temperatura: %d" % (temperatura))
+#                print("Condicions: %s" % (condicions))
+#                print("Dron en espera.")
+#                status=6
+#        else:
+#            print("Avís: Hi ha hagut un error en la connexió amb l'API del temps.")
 
 
     # JSON
@@ -228,7 +234,7 @@ def update_status(id, status, temps):
 
 
     # Anomalia fallo tecnic
-    segons_anomalia = 100
+    segons_anomalia = 10000
     fallos_tecnics=["El dron ha explotat", "Motor averiat", "Ala trencada", "Sensor averiat", "S'ha perdut la comunicació"]
     # Si es supera el temps de anomalia i (opcional) el factor aleatori 1/10
     if int(time.time()) - temps > segons_anomalia and not bool(random.randint(0,9)):
@@ -236,7 +242,7 @@ def update_status(id, status, temps):
         print("    Es requereix asistència per retirar el dron de l'útima posició enregistrada.")
         status=8
     # Anomalia obstacle
-    segons_anomalia = 50
+    segons_anomalia = 5000
     # Si es supera el temps de anomalia i (opcional) el factor aleatori 1/10
     if int(time.time()) - temps > segons_anomalia:
         print("ATENCIÓ: Obstacle imprevist a la ruta. Redirigint...")
@@ -360,7 +366,7 @@ def control():
                     waiting = (time.time() - init)
 
 	            # Atencio, el temps que espera el podem modificar
-                if waiting > time_wait_client:
+                if waiting >= time_wait_client:
                 # Anomalia: usuari no recull el paquet a temps
                     update_status(ID, 5, temps)
                     # Es podria posar anomalia nova de tornant a colemna amb error
