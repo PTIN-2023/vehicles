@@ -271,6 +271,23 @@ def on_message(client, userdata, msg):
 
         else:
             print("Message: " + msg.payload.decode('utf-8'))
+    
+    #anomalia pedido cancelado
+    elif msg.topic == "PTIN2023/DRON/CANCELDELIVERY":
+        if(is_json(msg.payload.decode('utf-8'))):
+
+            payload = json.loads(msg.payload.decode('utf-8'))
+            needed_keys = ["id_dron"]
+            
+            if all(key in payload for key in needed_keys):                
+                if ID == payload[needed_keys[0]]:
+                    wait_client = False
+                    dron_return = True
+                    print("USER RECEIVE CANCELED!")
+            else:
+                print("FORMAT ERROR! --> PTIN2023/DRON/CANCELDELIVERY")
+        else:
+            print("Message: " + msg.payload.decode('utf-8'))
 
 def start():
 
