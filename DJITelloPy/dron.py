@@ -62,12 +62,26 @@ complete_url = base_url + "appid=" + api_key + "&units=metric"
 autonomy = 500
 battery_level = 100
 
+# Saves current drone orientation (in degrees as int)
+orientation = 0
+
 # ------------------------------------------------------------------------------ #
 
 def get_angle(x1, y1, x2, y2):
+    global orientation
+
     dx = x2 - x1
     dy = y2 - y1
-    return int(math.degrees(math.atan2(dy, dx)))
+    dif_d = int(math.degrees(math.atan2(dy, dx)))
+    dif_d -= orientation
+    if dif_d > 180 or dif_d < -180:
+        dif_d = dif_d%180
+
+    orientation += dif_d
+
+    print("orientation: %d", orientation)
+
+    return dif_d
 
 # Function to control the dron movement based on the angle
 def move_dron(angle, distance, battery_level, autonomy):
@@ -75,7 +89,7 @@ def move_dron(angle, distance, battery_level, autonomy):
     print("DRON FÍSIC: Sortint a un punt")
     tello.rotate_clockwise(angle)
     tello.move_forward(distance*100)
-    tello.rotate_clockwise(-angle)
+    #tello.rotate_clockwise(-angle)
     # Multiplica * 100 perque estava en metres
 
     # Això es un placeholder, cal programar el que es llegeixi el qr i torni
@@ -109,6 +123,7 @@ def start_dron():
 
     global wait_client
 
+    global orientation
     global autonomy
     global dron_return
     global battery_level
@@ -133,6 +148,9 @@ def start_dron():
         # Calculate the distance between the current point and the next point
         distance = int(math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2))
 
+        # Updates the current orientation to get the minimum degree value
+        orientation = orientation%360
+
         # Calculate the angle between the current point and the next point
         angle = get_angle(x1, y1, x2, y2)
 
@@ -147,6 +165,14 @@ def start_dron():
 
     print("DRON FÍSIC: S'ha arribat al final de la ruta.")
     # tello.move_down(tello.get_distance_tof())
+    if dron_return:
+        if orientation > 180:
+            orientation = 360-orientation
+        elif orientation < 180:
+            orientation = -orientation
+
+        tello.rotate_clockwise(orientation)
+        orientation = 0
     tello.land()
 
     wait_client = True
