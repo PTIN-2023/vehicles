@@ -7,13 +7,7 @@ import paho.mqtt.client as mqtt
 import requests
 # ---------------------------- #
 tello = Tello()
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--id', dest = 'id', help = 'DRON ID')
-args = parser.parse_args()
-
-ID = int(args.id)
-
+ID = 0
 # ------------------------------------------------------------------------------ #
 
 status_dron = {
@@ -44,19 +38,16 @@ status_desc = {
 
 clientS = mqtt.Client()
 
+coordinates_normalized = [[0, 0], [1, 0], [1, 1]]
+
 coordinates = None
 dron_return = False
 wait_client = False
-user_confirmed = False   # Nos lo mandan
+user_confirmed = False
 order_delivered = False
 start_coordinates = False
 
-time_wait_client = 10 # seconds
-
-# API per el temps que fa
-api_key = "Secret"
-base_url = "http://api.openweathermap.org/data/2.5/weather?"
-complete_url = base_url + "appid=" + api_key + "&units=metric"
+time_wait_client = 10
 
 # Initialize the battery level and the autonomy
 autonomy = 500
@@ -68,12 +59,15 @@ orientation = 0
 # ------------------------------------------------------------------------------ #
 
 def get_angle(x1, y1, x2, y2):
+    
     global orientation
 
     dx = x2 - x1
     dy = y2 - y1
+    
     dif_d = int(math.degrees(math.atan2(dy, dx)))
     dif_d -= orientation
+    
     if dif_d > 180 or dif_d < -180:
         dif_d = dif_d%180
 
@@ -87,27 +81,9 @@ def get_angle(x1, y1, x2, y2):
 def move_dron(angle, distance, battery_level, autonomy):
 
     print("DRON FÍSIC: Sortint a un punt")
+    
     tello.rotate_clockwise(angle)
     tello.move_forward(distance*100)
-    #tello.rotate_clockwise(-angle)
-    # Multiplica * 100 perque estava en metres
-
-    # Això es un placeholder, cal programar el que es llegeixi el qr i torni
-#    qr_escanejat = False
-#    while not qr_escanejat:
-#        if not bool(random.randint(0,999)):
-#            qr_escanejat = True
-#            print("DRON FÍSIC: QR escanejat. Retornant a base...")
-
-#    tello.takeoff()
-#    tello.move_up(50)
-#    tello.rotate_clockwise(180)
-#    tello.move_forward(int(distance)*100)
-
-#    print("DRON FÍSIC: Aterritzant a base")
-    # tello.move_down(50)
-#    tello.land()
-
 
     # Calculate the battery usage based on the distance traveled
     battery_level = tello.get_battery()
@@ -143,7 +119,7 @@ def start_dron():
     for i in range(1, len(coordinates)):
 
         # Get next point
-        x2, y2 = coordinates[i][0], coordinates[i][1]
+        x2, y2 = coordinates_normalized[i][0], coordinates_normalized[i][1]
 
         # Calculate the distance between the current point and the next point
         distance = int(math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2))
@@ -178,60 +154,12 @@ def start_dron():
     wait_client = True
     coordinates.reverse()
 
-"""
-    # https://djitellopy.readthedocs.io/en/latest/tello/
-    # Moves -> cm, rotate -> Grados
-    tello = Tello()
-
-    print("DRON FÍSIC: Connectant amb el dron...")
-    tello.connect()
-    print("DRON FÍSIC: Ready for takeoff. ")
-    tello.takeoff()
-
-    print("DRON FÍSIC: Iniciant ruta de prova")
-    tello.move_forward(200)
-    time.sleep(2)
-    tello.rotate_clockwise(180)
-    tello.move_forward(200)
-
-    print("DRON FÍSIC: Aterritzant")
-    tello.land()
-"""
-
 # ------------------------------------------------------------------------------ #
 
 def send_location(id, location, status, battery, autonomy):
 
     # Connect to MQTT server
     clientS.connect("147.83.159.195", 24183, 60)
-
-    # Anomalia bateria
-    if battery <= 5:
-        print("CRÍTIC: Nivell de bateria crític (%d). Retornant dron a la colmena..." % battery)
-        status=5
-    elif battery <= 10:
-        print("ATENCIÓ: Nivell de bateria baix (%d)" % battery)
-
-    # Anomalia temps
-    # Posem factor Random perque no fagi calls a la api cada dos per tres
-#    if(bool(random.randint(0,9))):
-#        url = complete_url + "&lat=" + str(location[0]) + "&lon=" + str(location[1])
-#        response = requests.get(url)
-#        x = response.json()
-#        if x["cod"] != "404":
-#            y = x["main"]
-#            temperatura = y["temp"]
-#            full = x["weather"]
-#            condicio = full[0]["main"]
-#            if condicio == "rain" or condicio == "storm" or temperatura > 35 or temperatura < 5:
-#                print("ALERTA: Condicions atmosferiques adverses.")
-#                print("Temperatura: %d" % (temperatura))
-#                print("Condicions: %s" % (condicions))
-#                print("Dron en espera.")
-#                status=6
-#        else:
-#            print("Avís: Hi ha hagut un error en la connexió amb l'API del temps.")
-
 
     # JSON
     msg = {	"id_dron": 	        id,
@@ -248,7 +176,7 @@ def send_location(id, location, status, battery, autonomy):
     mensaje_json = json.dumps(msg)
 
     # Publish in "PTIN2023/DRON"
-    clientS.publish("PTIN2023/DRON/UPDATELOCATION", mensaje_json)
+    clientS.publish("PTIN2023/VILANOVA/DRON/UPDATELOCATION", mensaje_json)
 
     # Close MQTT connection
     clientS.disconnect()
@@ -257,22 +185,6 @@ def update_status(id, status, temps):
 
     # Connect to MQTT server
     clientS.connect("147.83.159.195", 24183, 60)
-
-
-    # Anomalia fallo tecnic
-    segons_anomalia = 10000
-    fallos_tecnics=["El dron ha explotat", "Motor averiat", "Ala trencada", "Sensor averiat", "S'ha perdut la comunicació"]
-    # Si es supera el temps de anomalia i (opcional) el factor aleatori 1/10
-    if int(time.time()) - temps > segons_anomalia and not bool(random.randint(0,9)):
-        print("CRÍTIC: Hi ha hagut un error tècnic amb el dron de ID %d, missatge d'error: '%s'" % id, fallos_tecnics[random.randint(0,4)])
-        print("    Es requereix asistència per retirar el dron de l'útima posició enregistrada.")
-        status=8
-    # Anomalia obstacle
-    segons_anomalia = 5000
-    # Si es supera el temps de anomalia i (opcional) el factor aleatori 1/10
-    if int(time.time()) - temps > segons_anomalia:
-        print("ATENCIÓ: Obstacle imprevist a la ruta. Redirigint...")
-        status=8
 
     # JSON
     msg = {	"id_dron":      id,
@@ -283,7 +195,7 @@ def update_status(id, status, temps):
     mensaje_json = json.dumps(msg)
 
     # Publish in "PTIN2023/DRON"
-    clientS.publish("PTIN2023/DRON/UPDATESTATUS", mensaje_json)
+    clientS.publish("PTIN2023/VILANOVA/DRON/UPDATESTATUS", mensaje_json)
 
     print("DRON: " + str(id) + " | STATUS:  " + status_desc[status])
 
@@ -393,30 +305,23 @@ def control():
 
 	            # Atencio, el temps que espera el podem modificar
                 if waiting >= time_wait_client:
-                # Anomalia: usuari no recull el paquet a temps
                     update_status(ID, 5, temps)
-                    # Es podria posar anomalia nova de tornant a colemna amb error
                     order_delivered = False
-                    print("Error: Temps d'espera per recollir el paquet esgotat. Retornant a la colmena...")
+
                 else:
                     if user_confirmed:
-                        # En proceso de descarga ~ 5s
                         update_status(ID, 2, temps)
                         time.sleep(5)
                         order_delivered = True
                     else:
-                        # Anomalia: usuari no autoritzat pel paquet
                         update_status(ID, 5, temps)
-                        # Es podria posar anomalia nova de tornant a colemna amb error
                         order_delivered = False
-                        print("Error: Usuari que ha intentat recollir el paquet no està autroitzat. Retornant a la colmena...")
 
                 wait_client = False
                 dron_return = True
 
             elif dron_return:
 
-                # Vuelta a a la colmena
                 update_status(ID, 5, temps)
                 start_dron()
 
