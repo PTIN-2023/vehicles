@@ -47,7 +47,7 @@ user_confirmed = False
 order_delivered = False
 start_coordinates = False
 
-time_wait_client = 10
+time_wait_client = 90
 
 # Initialize the battery level and the autonomy
 autonomy = 500
@@ -160,6 +160,7 @@ def send_location(id, location, status, battery, autonomy):
 
     # Connect to MQTT server
     clientS.connect("147.83.159.195", 24183, 60)
+#   clientS.connect("test.mosquitto.org", 1883, 60)
 
     # JSON
     msg = {	"id_dron": 	        id,
@@ -221,7 +222,7 @@ def on_message(client, userdata, msg):
 
     global ID
 
-    if msg.topic == "PTIN2023/DRON/STARTROUTE":
+    if msg.topic == "PTIN2023/VILANOVA/DRON/STARTROUTE":
 
         global coordinates
         if(is_json(msg.payload.decode('utf-8'))):
@@ -234,11 +235,11 @@ def on_message(client, userdata, msg):
                     coordinates = json.loads(payload[needed_keys[2]])
                     print("RECEIVED ROUTE: " + str(coordinates[0]) + " -> " + str(coordinates[-1]))
             else:
-                print("FORMAT ERROR! --> PTIN2023/DRON/STARTROUTE")
+                print("FORMAT ERROR! --> PTIN2023/VILANOVA/DRON/STARTROUTE")
         else:
             print("Message: " + msg.payload.decode('utf-8'))
 
-    elif msg.topic == "PTIN2023/DRON/CONFIRMDELIVERY":
+    elif msg.topic == "PTIN2023/VILANOVA/DRON/CONFIRMDELIVERY":
 
         global user_confirmed
         if(is_json(msg.payload.decode('utf-8'))):
@@ -251,7 +252,7 @@ def on_message(client, userdata, msg):
                     user_confirmed = (payload[needed_keys[1]] == 1)
                     print("USER RECEIVE CONFIRMED!", user_confirmed)
             else:
-                print("FORMAT ERROR! --> PTIN2023/DRON/CONFIRMDELIVERY")
+                print("FORMAT ERROR! --> PTIN2023/VILANOVA/DRON/CONFIRMDELIVERY")
 
         else:
             print("Message: " + msg.payload.decode('utf-8'))
@@ -263,6 +264,7 @@ def start():
     clientR.on_message = on_message
 
     clientR.connect("147.83.159.195", 24183, 60)
+    #clientR.connect("test.mosquitto.org", 1883, 60)
     clientR.loop_forever()
 
 # ------------------------------------------------------------------------------ #
