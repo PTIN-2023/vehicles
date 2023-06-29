@@ -1,7 +1,7 @@
 import os
 from math import pow, sqrt
 
-distance_between_pints = int(os.environ.get('DISTANCE_BETWEEN_POINTS'))
+distance_between_points = int(os.environ.get('DISTANCE_BETWEEN_POINTS'))
 
 def delta(init, fin):
     return fin - init
@@ -30,7 +30,7 @@ def generate_extra_points(coordinates):
         deltaLon = delta(longitude_in, longitude_fin)
 
         dist        = distance(latitude_in, longitude_in, latitude_fin, longitude_fin)
-        n_points    = int(dist / distance_between_pints)
+        n_points    = int(dist / distance_between_points)
 
         print(n_points)
 
