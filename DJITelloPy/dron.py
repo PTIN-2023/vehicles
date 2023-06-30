@@ -105,7 +105,7 @@ def start_dron():
     global battery_level
 
     # Get starting point
-    x1, y1 = coordinates[0][0], coordinates[0][1]
+    x1, y1 = coordinates_normalized[0][0], coordinates_normalized[0][1]
 
     print("DRON FÍSIC: Connectant amb el dron...")
     tello.connect()
@@ -134,7 +134,7 @@ def start_dron():
         battery_level, autonomy = move_dron(angle, distance, battery_level, autonomy)
 
         # Send the dron position to Cloud
-        send_location(ID, coordinates[0], 5 if dron_return else 3, battery_level, autonomy)
+        send_location(ID, coordinates[i], 5 if dron_return else 3, battery_level, autonomy)
 
         # Update the current point
         x1, y1 = x2, y2
@@ -152,6 +152,7 @@ def start_dron():
     tello.land()
 
     wait_client = True
+    coordinates_normalized.reverse()
     coordinates.reverse()
 
 # ------------------------------------------------------------------------------ #
@@ -313,10 +314,13 @@ def control():
                 else:
                     if user_confirmed:
                         update_status(ID, 2, temps)
-                        time.sleep(5)
+                        time.sleep(10)
                         order_delivered = True
+
+                        update_status(ID, 9, temps)
+                        time.sleep(5)
                     else:
-                        update_status(ID, 5, temps)
+                        update_status(ID, 10, temps)
                         order_delivered = False
 
                 wait_client = False
