@@ -59,15 +59,15 @@ orientation = 0
 # ------------------------------------------------------------------------------ #
 
 def get_angle(x1, y1, x2, y2):
-    
+
     global orientation
 
     dx = x2 - x1
     dy = y2 - y1
-    
+
     dif_d = int(math.degrees(math.atan2(dy, dx)))
     dif_d -= orientation
-    
+
     if dif_d > 180 or dif_d < -180:
         dif_d = dif_d%180
 
@@ -81,7 +81,7 @@ def get_angle(x1, y1, x2, y2):
 def move_dron(angle, distance, battery_level, autonomy):
 
     print("DRON FÍSIC: Sortint a un punt")
-    
+
     tello.rotate_clockwise(angle)
     tello.move_forward(distance*100)
 
@@ -103,6 +103,7 @@ def start_dron():
     global autonomy
     global dron_return
     global battery_level
+    global coordinates
 
     # Get starting point
     x1, y1 = coordinates_normalized[0][0], coordinates_normalized[0][1]
@@ -166,8 +167,8 @@ def send_location(id, location, status, battery, autonomy):
     # JSON
     msg = {	"id_dron": 	        id,
             "location_act": 	{
-                "latitude":     location[0],
-                "longitude":    location[1]
+                "latitude":     location[1],
+                "longitude":    location[0]
             },
             "status_num":       status,
             "status":           status_dron[status],
