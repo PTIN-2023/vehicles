@@ -134,7 +134,7 @@ def start_dron():
         # Control the dron movement based on the angle and update the battery level and the autonomy
         battery_level, autonomy = move_dron(angle, distance, battery_level, autonomy)
 
-        # Send the dron position to Cloud
+        # Send the dron position to Edge
         send_location(ID, coordinates[i], 5 if dron_return else 3, battery_level, autonomy)
 
         # Update the current point
